@@ -1,9 +1,7 @@
 % This script saves intermediate step results of MOp-SSp border detection
 % from Nissl images of consecutive sections.
 %% 0. initialize
-bnddet_init; % initialize files and directories
-atlas_init;
-% parameters
+bnddet_init; % initialize
 regionids=load('mouseregionids.mat');
 % manually identify the section range to be 50-130
 istart=input(['Please specify the starting section number for ',brainID,': '],'s');
@@ -16,7 +14,6 @@ L=length(seci);
 ds=20; % 20X downsample
 imgsize=imfinfo([imgdir,'/',filelist{1}]);
 imgsize=[imgsize.Height,imgsize.Width]; % universal image size
-dv=0.92; % voxel size in plane in the original resolution
 %% 1. run through all sections and save intermediate results
 fid=fopen([savedir,'/',brainID,'_drop.txt'],'w+');
 formatspec='%s\n';
@@ -92,6 +89,7 @@ profile_align;
 disp('Flat maps of cortical profile and atlas segmentations aligned.')
 %% 2.2 SS layer 5a detection
 [L5smooth]=layer5a(ftstack,[savedir,'/layer5aflat.tif']);
+% L5ftstack=L5smooth; % Samik
 % win=5;
 % step=1;
 % [bndpos, maxi]=layer5a_inner_bound(ftstack,L5smooth,win,step);
@@ -111,7 +109,7 @@ for i=1:L
     bndpos_profile.left(i,:)=[bndpos_r(i,1),layerpos(i,1)];
     bndpos_profile.right(i,:)=[bndpos_r(i,2),layerpos(i,2)];
 end
-save(volsavefile,'bndpos_profile','L5smooth','-v7.3')
+save(volsavefile,'bndpos_profile','-v7.3')
 disp('Layer 5a border detected in the flat maps.')
 %% 2.4 project back to cortical normals
 tic;
@@ -126,6 +124,7 @@ for i=1:L
     f = seci(i);
     [~,filename,~]=fileparts(filelist{f}); % get file name
     borderfile=[savedir,'/',filename,'.mat'];
+    
     se=strel('disk',7);
     if exist(borderfile,'file')
         load(borderfile,'BL')
@@ -153,8 +152,12 @@ disp('Smooth surface of the border generated.')
 %% 3.3 transform into atlas space
 se=strel('sphere',1);
 volsurf1=imdilate(volsurf,se);
-volsurfatlas=transform_reg_to_atlas_n(volsurf1,[dv*ds,dv*ds,zspace],geometry_file,deformation_file,atlas_vtk);
+atlas_vtk = [atlasdir,'average_template_25.vtk'];
+deformation_file=[imgdir0,brainID,'/Registration_OUTPUT/atlas_to_registered_displacement.vtk'];
+geometry_file=[imgdir0,brainID,'/INPUT_DATA/geometry.csv'];
+volsurfatlas=transform_reg_to_atlas_n(volsurf1,[.92*ds,.92*ds,zspace],geometry_file,deformation_file,atlas_vtk);
 % limit to cortex
+atlas_anno_vtk=[atlasannodir,'annotation_25.vtk'];
 [~,~,~,atlasanno,~] = read_vtk_image(atlas_anno_vtk);
 atlasctx=ismember(atlasanno,regionids.cortexids);
 volsurfatlas=volsurfatlas.*atlasctx;
@@ -162,20 +165,21 @@ saveimgstack(uint8(volsurfatlas*255),[savedir,'MOpsboundary_atlas.tif']); % save
 save(volsavefile,'volsurfatlas','-append')
 disp('Transformed into atlas space.')
 %% 4. 2D overlay with atlases (this part is time consuming)
-for i=1:length(seci)
-    tic;
-    % parfor i=1:length(seci)
-    fileid=filelist{seci(i)};
-    [~,filename,~]=fileparts(fileid);
-    atlasbnd=load([savedir,filename,'.mat'],'atlasbnd');
-    fields=fieldnames(atlasbnd);
-    if ~isempty(fields)
-        atlasbnd=atlasbnd.atlasbnd;
-        border_atlas_vis(filename,regionids,imgdir,savedir,atlasbnd,savedir,'line');
-    else
-        atlasbnd=border_atlas_vis(filename,regionids,imgdir,savedir,segmaskdir,savedir,'line');
-        save([savedir,filename,'.mat'],'atlasbnd','-append');
-    end
-    close;
-    toc;
-end
+% jp2dir=[imgdir0,brainID,'/Transformation_OUTPUT/',brainID,'_img/'];
+% for i=1:length(seci)
+%     tic;
+%     % parfor i=1:length(seci)
+%     fileid=filelist{seci(i)};
+%     [~,filename,~]=fileparts(fileid);
+%     atlasbnd=load([savedir,filename,'.mat'],'atlasbnd');
+%     fields=fieldnames(atlasbnd);
+%     if ~isempty(fields)
+%         atlasbnd=atlasbnd.atlasbnd;
+%         border_atlas_vis(filename,regionids,jp2dir,savedir,atlasbnd,savedir,'line');
+%     else
+%         atlasbnd=border_atlas_vis(filename,regionids,jp2dir,savedir,segmaskdir,savedir,'line');
+%         save([savedir,filename,'.mat'],'atlasbnd','-append');
+%     end
+%     close;
+%     toc;
+% end
