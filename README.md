@@ -1,4 +1,4 @@
-# AutoSegmentBrain
+# Histology-based Brain Segmentation Tool
 Automatic segmentation of brain regions based on histology data
 
 # 1. MO_SS_border
